@@ -1,10 +1,8 @@
-import numpy as np
-
 def data_aggregator(sampleName):
     """
     This function takes in a sample name and parses through the files containing cleaned .txt files pertaining to the
-    sample. It then combines the separate 2D scan arrays as a single 3D array. Finally, it writes this 3D array to a
-    new file.
+    sample. It then combines the separate 2D scan arrays as a single 3D array, which it returns. Finally, it writes
+    this 3D array to a new file as a 2D array of the pixels (x) and their z info (y).
     
     inputs: a string variable of the sample's identification
     
@@ -43,6 +41,8 @@ def data_aggregator(sampleName):
         for j in range(y):
             aggr[i, j, 4] = stif[i, j]
             
-    %store aggr > '../Data/AFM/AggregatedData/%s.txt' % (sampleName)
+    two_dim_aggr = aggr.reshape((x*y), z)
+            
+    np.savetxt('../Data/AFM/AggregatedData/%s.txt'%(sampleName), two_dim_aggr) 
     
     return aggr
