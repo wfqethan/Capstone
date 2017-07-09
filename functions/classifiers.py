@@ -1,4 +1,5 @@
 import math
+import random
 
 import numpy as np
 
@@ -300,5 +301,147 @@ def euclidean_classifier_scan(sampleName):
             for j in range(y):
                 scan[i, j] = euc_classified_scan[i, j]
         scan = scan.reshape((x2, z))
+	np.savetxt('../Data/AFM/AggregatedData/ClassificationTest/%s.txt'%(sampleName), scan)
     
     return euc_classified_scan
+
+def iterative_classifier_wrapper(sampleName):
+    """
+    This function starts with the PixelClassifier model's classifications, then randomly walks from pixel-to-pixel to
+    compare each pixel to its neighbors, using that to update the classification. It then compares the new set of
+    classifications to the old classifications. If they differ by more than a negligible amount, the process starts
+    again until the differences are within a tolerance.
+    
+    inputs: sampleName - a string with the name of the sample, excluding the filetype extension, which is assumed to
+                    be .txt
+            
+    outputs: new_classifications - a 2D array with the final identities of the pixels
+                *writes a new file to computer harddrive
+    """
+    
+    scan = np.loadtxt('../Data/AFM/AggregatedData/ClassificationTest/%s.txt'% (sampleName))
+    
+    x2, z = scan.shape
+    x = y = int(math.sqrt(x2))
+    scan = scan.reshape((x, y, z))
+    
+    classifications = np.empty([x, y])
+    new_classifications = np.empty([x, y])
+    
+    if z == 5:           #If there has been no prior single pixel classifications, this initializes those values
+        for i in range(x):
+            for j in range(y):
+                classifications[i, j] = pixel_classifier_pixel(scan[i, j, 5])         
+    else:
+        for i in range(x): #initialize the classifications to the PixelClassifier identities
+            for j in range(y):
+                classifications[i, j] = scan[i, j, 5]
+        
+    coords = [(xx,yy) for xx in range(1, x-1) for yy in range(1, y-1)] #generate a list of all coordinate pairs
+    
+    pcnt_diff = 1 
+    
+    while True:  #while there is more than a 20% difference b/w old & new classifications, keep iterating
+        new_classifications, pcnt_diff = iterative_classifier_comparison(classifications, coords)
+        print ('Percent Difference: ', pcnt_diff)
+        if pcnt_diff <= 0.2:
+            break
+    
+    if z <= 6:
+        scan = scan.reshape((x2, z))
+        pixel_identities_1d = pixel_identities.reshape((x2, 1))
+        
+        scan_and_classif = np.append(scan, pixel_identities_1d, axis = 1)
+        np.savetxt('../Data/AFM/AggregatedData/ClassificationTest/%s.txt'%(sampleName), scan_and_classif) 
+
+    else:
+        for i in range(x):
+            for j in range(y):
+                scan[i, j, 7] = pixel_identities[i, j]
+        scan = scan.reshape((x2, z))
+        np.savetxt('../Data/AFM/AggregatedData/ClassificationTest/%s.txt'%(sampleName), scan) 
+    
+    return new_classifications
+
+def iterative_classifier_comparison(classifications, coords):
+    """
+    This function takes in two 2D arrays of classifications for a given AFM scan. It iterates through classifications,
+    populates new_classifications based on the neighbor identities and compares the two arrays.
+    
+    inputs: classifications - a 2D np.array of the existing classifications (-1/1 = amorphous/xtal) for each pixel
+            coords - a list of all of the possible coordinate pairs
+            
+    outputs: new_classifications - a 2D np.array of the new classifications for each pixel
+             pcnt_diff - the percentage of pixels in the scan that have different classifications between the old
+                         classifications and the new classifications
+    """
+    random.shuffle(coords) #randomly mix up the pairs of coordinates
+    
+    x, y = classifications.shape
+    
+    coord_iterator = 0
+    coord_array = np.empty([x-2, y-2, 2])
+    
+    for i in range(x-2):    #put the coordinate pairs into 2D array
+        for j in range(y-2):
+            xcoord, ycoord = coords[coord_iterator]
+            coord_iterator += 1
+            coord_array[i, j, 0] = xcoord
+            coord_array[i, j, 1] = ycoord
+    
+    new_classifications = np.empty([x, y])
+    neighbor_classes = np.empty([8])
+    
+    for i in range(x-2):
+        for j in range(y-2):
+            neighbors = neighbor_locater(coord_array[i, j, 0], coord_array[i, j, 1])
+            pixel_class = classifications[i, j]
+        
+            for k in range(8):
+                neighborx, neighbory = neighbors[k]
+                neighborx = int(neighborx)
+                neighbory = int(neighbory)
+                neighbor_classes[k] = classifications[neighborx, neighbory]
+
+            new_classifications[i, j] = iterative_classifier_assignment(pixel_class, neighbor_classes)
+        
+    num_diff_pixels = 0
+    
+    for i in range(x):
+        for j in range(y):
+            if new_classifications[i, j] == classifications[i, j]:
+                pass
+            else:
+                    num_diff_pixels += 1
+    
+    pcnt_diff = num_diff_pixels / (x * y)
+    
+    return new_classifications, pcnt_diff
+
+def iterative_classifier_assignment(pixel_class, neighbor_classes):
+    """
+    This function takes in the classifications of a pixel and its neighbors, then reclassifies the pixel taking into
+    account the classes of its neighbors.
+    
+    inputs: pixel_class - an int that holds the initial identity of the pixel
+            neighbor_classes - a 1D array that holds the identities of the pixel's neighbors
+    
+    outputs: new_pixel_class - the new identity of the pixel
+    """
+    amorphous = 0
+    crystalline = 0
+    
+    for i in range(8):
+        if neighbor_classes[i] == 1:
+            crystalline += 1
+        else:
+            amorphous += 1
+    
+    if crystalline > 5:
+        new_pixel_class = 1
+    elif amorphous > 5:
+        new_pixel_class = -1
+    else:
+        new_pixel_class = pixel_class
+    
+    return new_pixel_class
