@@ -12,7 +12,7 @@ The goal of this project is to begin to establish a relationship between the pro
 ***
 
 The final version of the software is capabable of reading raw microscope files of thin film from the users, processing through the aggregated txt file and producing a prediction of how crystal/amorphous the 
-thin film is; as well as the charge mobility prediction.
+thin film is; as well as the charge mobility prediction.  This project will make use of both published experimental data and generation of its own data and structural characterizations.
 
 ***
 ### Prerequisites
